@@ -30,6 +30,12 @@
     <ClCompile Include="RockPaperScissors.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="CutTheWire.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="CoinFlip.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Game.h">
@@ -51,6 +57,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Room.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CutTheWire.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CoinFlip.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

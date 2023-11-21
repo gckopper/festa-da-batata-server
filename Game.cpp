@@ -3,7 +3,7 @@
 void MessageHandler::handleClient(SOCKET clientSocket)
 {
 	int iResult;
-	unsigned char recvbuf[DEFAULT_BUFLEN];
+	unsigned char recvbuf[DEFAULT_BUFLEN] = {0};
 	iResult = recv(clientSocket, (char*)recvbuf, DEFAULT_BUFLEN, 0);
 	if (iResult > 0) {
 		// processa todas as mensagens recebidas
@@ -149,38 +149,7 @@ void MessageHandler::processMessage(std::unique_ptr<ClientMessage> msg, std::uni
 		return;
 	case minigame:
 		std::cout << "minigame" << std::endl;
-		if (!room->minigame) 	{
-			response->msg_id = e_invalid_action;
-			return;
-		}
-		room->minigame->processMessage(std::move(msg), response, room, player_index);
-		if (room->minigame->isFinished())
-		{
-			room->isInMinigame = false;
-			room->minigame.reset();
-			room->whose_turn = 0;
-			room->player_remaining_steps = 0;
-			auto turn = std::make_unique<ServerMessage>();
-			turn->msg_id = n_turn_start;
-			MessageHandler::notifyPlayer(room, std::move(turn), room->whose_turn);
-			uint_fast8_t winner = room->minigame->getWinner();
-			auto end = std::make_unique<ServerMessage>();
-			end->msg_id = n_minigame_end;
-			end->data = (unsigned char*)std::calloc(1, sizeof(char));
-			end->data_size = 1;
-			end->data[0] = winner;
-			if (winner != MAX_PLAYERS)
-			{
-				for (uint_fast8_t i = 1; i < room->player_count; i++)
-				{
-					room->coins[i] += PRIZE_MINIGAME;
-				}
-			}
-			else {
-				room->coins[winner] += PRIZE_MINIGAME;
-			}
-			notifyRoom(room, std::move(end), MAX_PLAYERS);
-		}
+		MessageHandler::processMinigame(std::move(msg), response, room, player_index);
 		break;
 	default:
 		std::cout << "Mensagem invalida" << std::endl;
@@ -288,6 +257,7 @@ void MessageHandler::processEmote(std::unique_ptr<ClientMessage> request, std::u
 	emote->data_size = 1;
 	emote->data[0] = request->optional;
 	notifyRoom(room, std::move(emote), player_id);
+	room->stat_emotes[player_id]++;
 	response->msg_id = r_ok;
 	return;
 }
@@ -348,7 +318,13 @@ void MessageHandler::processMove(std::unique_ptr<ClientMessage> request, std::un
 		response->msg_id = e_invalid_action;
 		return;
 	}
-	Direction d = (Direction)request->optional;
+	uint_fast8_t op = request->optional;
+	if (op > 3)
+	{
+		response->msg_id = e_invalid_action;
+		return;
+	}
+	Direction d = (Direction)op;
 	if (board.intersectionDirection(room->position[player_id], room->direction[player_id]) != d)
 	{
 		response->msg_id = e_invalid_action;
@@ -400,6 +376,8 @@ void MessageHandler::executeMovements(std::unique_ptr<ClientMessage> request, st
 	Odio odio = board.executeMove(room->position[player_id], r, room->direction[player_id], room->coins[player_id] > 20);
 	room->direction[player_id] = odio.direction;
 	room->player_remaining_steps = odio.remaining;
+	// se isso der underflow tem um bug em board.cpp
+	room->stat_steps[player_id] += r - odio.remaining;
 	uint_fast8_t pos = odio.x + odio.y * BOARD_WIDTH;
 	room->position[player_id] = pos;
 	
@@ -411,6 +389,8 @@ void MessageHandler::executeMovements(std::unique_ptr<ClientMessage> request, st
 		coins += std::rand() % 3;
 	}
 	response->data[1] = coins;
+	room->coins[player_id] += coins;
+	room->stat_coins[player_id] += coins;
 	// notifica a sala
 	auto move = std::make_unique<ServerMessage>();
 	move->msg_id = n_move;
@@ -436,7 +416,6 @@ void MessageHandler::executeMovements(std::unique_ptr<ClientMessage> request, st
 	{
 		room->round++;
 		room->minigame = MinigamesFactory::createMinigame((MinigamesEnum)((std::rand() % 3) + 1));
-		room->isInMinigame = true;
 	}
 	room->player_remaining_steps = 0;
 	// notifica o proximo player
@@ -491,11 +470,53 @@ void MessageHandler::processBuyBatata(std::unique_ptr<ClientMessage> request, st
 	return;
 }
 
+void MessageHandler::processMinigame(std::unique_ptr<ClientMessage> request, std::unique_ptr<ServerMessage>& response, std::shared_ptr<Room>& room, uint_fast8_t player_id)
+{
+	if (!room->minigame) {
+		response->msg_id = e_not_in_minigame;
+		return;
+	}
+	room->minigame->processMessage(std::move(request), response, room, player_id);
+	if (!room->minigame->isFinished())
+	{
+		return;
+	}
+	room->minigame.reset();
+	room->whose_turn = 0;
+	room->player_remaining_steps = 0;
+	auto turn = std::make_unique<ServerMessage>();
+	turn->msg_id = n_turn_start;
+	MessageHandler::notifyPlayer(room, std::move(turn), room->whose_turn);
+	std::array<bool, MAX_PLAYERS> winner = room->minigame->getWinner();
+	auto end = std::make_unique<ServerMessage>();
+	// o tamanho do vetor de vencedores e o numero de bytes necessarios para armazenar todos os vencedores
+	// o valor não dara overflow pois o numero diminui nas duas primeiras operacoes
+	// player_count de 0 seria um bug em outro lugar e divisao por 8 nao da underflow
+	// como o numero é dividido por 8 antes de ser somado 1, o valor nao dara overflow
+	uint_fast8_t bytes_needed = (room->player_count - 1) / 8 + 1;
+	end->data = (unsigned char*)std::calloc(bytes_needed, sizeof(char));
+	end->data_size = bytes_needed;
+	end->msg_id = n_minigame_end;
+
+	for (uint_fast8_t i = 0; i < room->player_count; i++)
+	{
+		if (winner[i])
+		{
+			end->data[i / 8] |= 1 << (i % 8);
+			room->coins[i] += PRIZE_MINIGAME;
+			room->stat_coins[i] += PRIZE_MINIGAME;
+		}
+	}
+}
+
 void MessageHandler::startGame(std::shared_ptr<Room>& room)
 {
 	// notifica a sala
 	auto start = std::make_unique<ServerMessage>();
 	start->msg_id = n_game_start;
+	start->data = (unsigned char*)std::calloc(1, sizeof(char));
+	start->data_size = 1;
+	start->data[0] = room->player_count;
 	notifyRoom(room, std::move(start), MAX_PLAYERS);
 	// notifica o primeiro player
 	auto turn = std::make_unique<ServerMessage>();
@@ -508,7 +529,7 @@ void MessageHandler::startGame(std::shared_ptr<Room>& room)
 void MessageHandler::endGame(std::shared_ptr<Room>& room)
 {
 	bool have_valid_socket = true;
-	for (uint_fast8_t i = 0; i < MAX_PLAYERS; i++)
+	for (uint_fast8_t i = 0; i < room->player_count; i++)
 	{
 		if (room->players[i] != INVALID_SOCKET)
 		{
@@ -521,7 +542,7 @@ void MessageHandler::endGame(std::shared_ptr<Room>& room)
 		// notifica a sala
 		auto end = std::make_unique<ServerMessage>();
 		end->msg_id = n_game_end;
-		end->data = (unsigned char*)std::calloc(1, sizeof(char));
+		end->data = (unsigned char*)std::calloc(room->player_count, sizeof(PlayerPodium));
 		end->data_size = 1;
 		end->data[0] = 1;
 		notifyRoom(room, std::move(end), MAX_PLAYERS);

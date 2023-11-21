@@ -30,6 +30,20 @@ enum MinigamesEnum {
 
 enum Hand { rock = 0, paper = 1, scissors = 2, no = 3 };
 
+struct PlayerPodium {
+	unsigned char player_id;
+	unsigned char batatas;
+	unsigned long long coins;
+	unsigned long long steps;
+	unsigned long long emotes;
+};
+
+enum BatataBonus {
+	coins = 0,
+	steps = 1,
+	emotes = 2,
+};
+
 enum message_id {
 	// to pronto pra jogar
 	ready      = 0,

@@ -8,6 +8,7 @@ std::unique_ptr<Minigame> MinigamesFactory::createMinigame(MinigamesEnum e)
 		return std::make_unique<RockPaperScissors>();
 		break;
 	case cut_the_wire:
+		return std::make_unique<CutTheWire>();
 		break;
 	case coin_flip:
 		break;

@@ -142,6 +142,7 @@
     <ClInclude Include="CoinFlip.h" />
     <ClInclude Include="CutTheWire.h" />
     <ClInclude Include="Game.h" />
+    <ClInclude Include="Logger.h" />
     <ClInclude Include="Room.h" />
     <ClInclude Include="MessageTypes.h" />
     <ClInclude Include="Minigame.h" />

@@ -13,17 +13,10 @@ void MessageHandler::handleClient(SOCKET clientSocket)
 			if (recvbuf[ROOM_CODE_SIZE] > 127 && iResult >= BIG_BUFLEN) {
 				size = BIG_BUFLEN;
 			}
-			std::cout << "Tamanho da mensagem: " << size << std::endl;
+			LOG("Tamanho da mensagem: " << size)
 			auto msg = std::make_unique<std::vector<unsigned char>>(recvbuf, recvbuf + size);
 			std::unique_ptr<ClientMessage> decoded_msg = MessageHandler::decodeMessage(std::move(msg), clientSocket);
-			auto response = std::make_unique<ServerMessage>();
-			processMessage(std::move(decoded_msg), response);
-			std::unique_ptr<std::vector<unsigned char>> encoded_msg = encodeMessage(std::move(response));
-			int sendResult = send(clientSocket, (char*)encoded_msg->data(), (int)encoded_msg->size(), 0);
-			if (sendResult == SOCKET_ERROR) {
-				printf("Erro ao enviar mensagem: %d\n", WSAGetLastError());
-				closesocket(clientSocket);
-			}
+			processMessage(std::move(decoded_msg));
 			iResult -= size;
 		}
 		if (iResult != 0) {
@@ -42,7 +35,6 @@ void MessageHandler::handleClient(SOCKET clientSocket)
 	else {
 		printf("Erro ao receber mensagem: %d\n", WSAGetLastError());
 		closesocket(clientSocket);
-		WSACleanup();
 		return;
 	}
 }
@@ -62,32 +54,33 @@ std::unique_ptr<ClientMessage> MessageHandler::decodeMessage(std::unique_ptr<std
 std::unique_ptr<std::vector<unsigned char>> MessageHandler::encodeMessage(std::unique_ptr<ServerMessage> msg)
 {
 	uint_fast8_t size = msg->data_size;
-	std::cout << "tamanho da resposta: " << size + 0 << std::endl;
+
 	auto res = std::make_unique<std::vector<unsigned char>>(size + 2);
-	auto src = (unsigned char*)(res->data());
-	std::memcpy(src, &msg->msg_id, 1);
+	unsigned char* src = res->data();
+	src[0] = (uint8_t)msg->msg_id;
 	src[1] = size;
 	if (size == 0)
 	{
 		return res;
 	}
-	std::memcpy(src + 2, &msg->data, size);
-	std::free(msg->data);
+	std::memcpy(src + 2, (unsigned char*)(msg->data), size);
+
+	delete msg->data;
 	return res;
 }
 
-void MessageHandler::processMessage(std::unique_ptr<ClientMessage> msg, std::unique_ptr<ServerMessage>& response)
+void MessageHandler::processMessage(std::unique_ptr<ClientMessage> msg)
 {
 	std::shared_ptr<Room> room;
 	auto room_code = std::string((char*)msg->room_code, ROOM_CODE_SIZE);
 	auto search = rooms.find(room_code);
-	std::cout << "Codigo da sala: " << room_code << std::endl;
-	std::cout << "id da mensagem: " << msg->msg_id << std::endl;
 	if (search == rooms.end()) {
-		// se a sala nao existe, cria uma nova
+		auto response = std::make_unique<ServerMessage>();
 		if (msg->msg_id != join) {
-			std::cout << "Sala nao existe" << std::endl;
+
 			response->msg_id = e_room_not_found;
+			MessageHandler::notifySocket(msg->creator, std::move(response));
+			closesocket(msg->creator);
 			return;
 		}
 		room = std::make_shared<Room>();
@@ -99,13 +92,13 @@ void MessageHandler::processMessage(std::unique_ptr<ClientMessage> msg, std::uni
 		{
 			room->players[i] = INVALID_SOCKET;
 		}
-		rooms.insert({ std::move(room_code), room });
 		response->msg_id = r_ok;
+		rooms.insert({ std::move(room_code), room });
+		notifyPlayer(room, std::move(response), 0);
 		return;
 	}
 	room = search->second;
 
-	std::cout << "Id da mensagem: " << msg->msg_id << std::endl;
 	uint_fast8_t player_index = MAX_PLAYERS;
 	for (uint_fast8_t i = 0; i < MAX_PLAYERS; i++)
 	{
@@ -116,44 +109,51 @@ void MessageHandler::processMessage(std::unique_ptr<ClientMessage> msg, std::uni
 	}
 	if (player_index == MAX_PLAYERS && msg->msg_id != join)
 	{
+		auto response = std::make_unique<ServerMessage>();
 		response->msg_id = e_player_not_in_room;
+		MessageHandler::notifySocket(msg->creator, std::move(response));
+		closesocket(msg->creator);
 		return;
 	}
 	switch (msg->msg_id)
 	{
 	case ready:
-		std::cout << "ready" << std::endl;
-		MessageHandler::processReady(std::move(msg), response, room, player_index);
+		LOG("ready");
+		MessageHandler::processReady(std::move(msg), room, player_index);
 		break;
 	case unready:
-		std::cout << "unready" << std::endl;
-		MessageHandler::processUnready(std::move(msg), response, room, player_index);
+		LOG("unready");
+		MessageHandler::processUnready(std::move(msg), room, player_index);
 		break;
 	case roll_dice:
-		std::cout << "roll_dice" << std::endl;
+		LOG("roll_dice");
+		MessageHandler::processRollDice(std::move(msg), room, player_index);
 		break;
 	case buy_batata:
-		std::cout << "buy_batata" << std::endl;
+		LOG("buy_batata");
+		MessageHandler::processBuyBatata(std::move(msg), room, player_index);
 		break;
 	case move:
-		std::cout << "move" << std::endl;
-		MessageHandler::processMove(std::move(msg), response, room, player_index);
+		LOG("move");
+		MessageHandler::processMove(std::move(msg), room, player_index);
 		break;
 	case emote:
-		std::cout << "emote" << std::endl;
-		MessageHandler::processEmote(std::move(msg), response, room, player_index);
+		LOG("emote");
+		MessageHandler::processEmote(std::move(msg), room, player_index);
 		break;
 	case join:
-		std::cout << "join" << std::endl;
-		MessageHandler::processJoin(std::move(msg), response, room, player_index);
+		LOG("join");
+		MessageHandler::processJoin(std::move(msg), room, player_index);
 		return;
 	case minigame:
-		std::cout << "minigame" << std::endl;
-		MessageHandler::processMinigame(std::move(msg), response, room, player_index);
+		LOG("minigame");
+		MessageHandler::processMinigame(std::move(msg), room, player_index);
 		break;
 	default:
 		std::cout << "Mensagem invalida" << std::endl;
+		auto response = std::make_unique<ServerMessage>();
 		response->msg_id = e_decode;
+		notifyPlayer(room, std::move(response), player_index);
 		return;
 	}
 }
@@ -162,12 +162,18 @@ void MessageHandler::notifyRoom(std::shared_ptr<Room> room, std::unique_ptr<Serv
 {
 	std::unique_ptr<std::vector<unsigned char>> encoded_msg = encodeMessage(std::move(msg));
 	bool got_error = false;
-	for (uint_fast8_t i = 0; i < MAX_PLAYERS; i++)
+	for (uint_fast8_t i = 0; i < room->player_count; i++)
 	{
 		SOCKET sock = room->players[i];
-		if (sock == INVALID_SOCKET || i == player_id)
+		if (i == player_id)
 		{
 			continue;
+		}
+		if (sock == INVALID_SOCKET)
+		{
+			LOG("Socket invalido em um notify room, terminando o jogo")
+			got_error = true;
+			break;
 		}
 		int sendResult = send(sock, (char*)encoded_msg->data(), (int)encoded_msg->size(), 0);
 		if (sendResult == SOCKET_ERROR) {
@@ -175,44 +181,61 @@ void MessageHandler::notifyRoom(std::shared_ptr<Room> room, std::unique_ptr<Serv
 			got_error = true;
 			closesocket(sock);
 			room->players[i] = INVALID_SOCKET;
-			continue;
+			break;
 		}
 	}
 	if (got_error)
 	{
+		LOG("Terminando o jogo depois de erros em notify room")
 		MessageHandler::endGame(room);
 	}
 }
 
 void MessageHandler::notifyPlayer(std::shared_ptr<Room> room, std::unique_ptr<ServerMessage> msg, uint_fast8_t player_id)
 {
-	std::unique_ptr<std::vector<unsigned char>> encoded_msg = encodeMessage(std::move(msg));
 	SOCKET sock = room->players[player_id];
-	int sendResult = send(sock, (char*)encoded_msg->data(), (int)encoded_msg->size(), 0);
-	if (sendResult == SOCKET_ERROR) {
-		printf("Erro ao enviar mensagem: %d\n", WSAGetLastError());
+	bool r = MessageHandler::notifySocket(sock, std::move(msg));
+	if (r)
+	{
 		room->players[player_id] = INVALID_SOCKET;
-		closesocket(sock);
+		LOG("Terminando o jogo depois de erros em notify player")
 		MessageHandler::endGame(room);
 	}
 }
 
-void MessageHandler::processReady(std::unique_ptr<ClientMessage> request, std::unique_ptr<ServerMessage>& response, std::shared_ptr<Room>& room, uint_fast8_t player_id)
+bool MessageHandler::notifySocket(SOCKET sock, std::unique_ptr<ServerMessage> msg)
 {
+	std::unique_ptr<std::vector<unsigned char>> encoded_msg = encodeMessage(std::move(msg));
+	int sendResult = send(sock, (char*)encoded_msg->data(), (int)encoded_msg->size(), 0);
+	if (sendResult == SOCKET_ERROR) {
+		printf("Erro ao enviar mensagem: %d\n", WSAGetLastError());
+		closesocket(sock);
+		return true;
+	}
+	return false;
+}
+
+void MessageHandler::processReady(std::unique_ptr<ClientMessage> request, std::shared_ptr<Room>& room, uint_fast8_t player_id)
+{
+	auto response = std::make_unique<ServerMessage>();
 	// player ja esta pronto
 	if (room->ready[player_id] || room->round != 0)
 	{
 		response->msg_id = e_invalid_action;
+		notifyPlayer(room, std::move(response), player_id);
 		return;
 	}
 	// marca o player como pronto
 	room->ready[player_id] = true;
 	// verifica se todos estao prontos
+
 	for (uint_fast8_t i = 0; i < MAX_PLAYERS; i++)
 	{
+
 		if (!room->ready[i])
 		{
 			response->msg_id = r_ok;
+			notifyPlayer(room, std::move(response), player_id);
 			return;
 		}
 	}
@@ -227,6 +250,7 @@ void MessageHandler::processReady(std::unique_ptr<ClientMessage> request, std::u
 		}
 	}
 	response->msg_id = r_ok;
+	notifyPlayer(room, std::move(response), player_id);
 	if (everyone_ready)
 	{
 		MessageHandler::startGame(room);
@@ -234,22 +258,26 @@ void MessageHandler::processReady(std::unique_ptr<ClientMessage> request, std::u
 	return;
 }
 
-void MessageHandler::processUnready(std::unique_ptr<ClientMessage> request, std::unique_ptr<ServerMessage>& response, std::shared_ptr<Room>& room, uint_fast8_t player_id)
+void MessageHandler::processUnready(std::unique_ptr<ClientMessage> request, std::shared_ptr<Room>& room, uint_fast8_t player_id)
 {
+	auto response = std::make_unique<ServerMessage>();
 	// player nao esta pronto
 	if (!room->ready[player_id] || room->round != 0)
 	{
 		response->msg_id = e_invalid_action;
+		notifyPlayer(room, std::move(response), player_id);
 		return;
 	}
 	// marca o player como nao pronto
 	room->ready[player_id] = false;
 	response->msg_id = r_ok;
+	notifyPlayer(room, std::move(response), player_id);
 	return;
 }
 
-void MessageHandler::processEmote(std::unique_ptr<ClientMessage> request, std::unique_ptr<ServerMessage>& response, std::shared_ptr<Room>& room, uint_fast8_t player_id)
+void MessageHandler::processEmote(std::unique_ptr<ClientMessage> request, std::shared_ptr<Room>& room, uint_fast8_t player_id)
 {
+	auto response = std::make_unique<ServerMessage>();
 	// notifica a sala
 	auto emote = std::make_unique<ServerMessage>();
 	emote->msg_id = n_emote;
@@ -259,34 +287,51 @@ void MessageHandler::processEmote(std::unique_ptr<ClientMessage> request, std::u
 	notifyRoom(room, std::move(emote), player_id);
 	room->stat_emotes[player_id]++;
 	response->msg_id = r_ok;
+	notifyPlayer(room, std::move(response), player_id);
 	return;
 }
 
-void MessageHandler::processJoin(std::unique_ptr<ClientMessage> request, std::unique_ptr<ServerMessage>& response, std::shared_ptr<Room>& room, uint_fast8_t player_id)
+void MessageHandler::processJoin(std::unique_ptr<ClientMessage> request, std::shared_ptr<Room>& room, uint_fast8_t player_id)
 {
+	auto response = std::make_unique<ServerMessage>();
+	LOG("JOIN")
 	// player ja esta na sala
 	if (player_id != MAX_PLAYERS)
 	{
 		response->msg_id = e_invalid_action;
+		MessageHandler::notifySocket(request->creator, std::move(response));
+		closesocket(request->creator);
 		return;
 	}
 	// sala cheia
 	if (room->player_count == MAX_PLAYERS)
 	{
 		response->msg_id = e_room_full;
+		MessageHandler::notifySocket(request->creator, std::move(response));
+		closesocket(request->creator);
 		return;
 	}
 	// jogo ja comecou
 	if (room->round != 0)
 	{
 		response->msg_id = e_game_already_started;
+		MessageHandler::notifySocket(request->creator, std::move(response));
+		closesocket(request->creator);
 		return;
 	}
 	// adiciona o player na sala
 	room->players[room->player_count] = request->creator;
-	room->player_count++;
+	player_id = room->player_count++;
 	room->name = std::string((char*)request->room_code, ROOM_CODE_SIZE);
+
 	response->msg_id = r_ok;
+	response->data = (unsigned char*)std::calloc(1, sizeof(char));
+	response->data_size = 1;
+	response->data[0] = room->player_count;
+
+	LOG("Player id: " << (int)player_id);
+	notifyPlayer(room, std::move(response), player_id);
+
 	// notifica a sala
 	auto join = std::make_unique<ServerMessage>();
 	join->msg_id = n_join;
@@ -297,18 +342,21 @@ void MessageHandler::processJoin(std::unique_ptr<ClientMessage> request, std::un
 	return;
 }
 
-void MessageHandler::processMove(std::unique_ptr<ClientMessage> request, std::unique_ptr<ServerMessage>& response, std::shared_ptr<Room>& room, uint_fast8_t player_id)
+void MessageHandler::processMove(std::unique_ptr<ClientMessage> request, std::shared_ptr<Room>& room, uint_fast8_t player_id)
 {
+	auto response = std::make_unique<ServerMessage>();
 	// verifica se o jogo começou
 	if (room->round == 0)
 	{
 		response->msg_id = e_game_not_started;
+		notifyPlayer(room, std::move(response), player_id);
 		return;
 	}
 	// verifica se e a vez do player
 	if (room->whose_turn != player_id)
 	{
 		response->msg_id = e_not_your_turn;
+		notifyPlayer(room, std::move(response), player_id);
 		return;
 	}
 	uint_fast8_t r = room->player_remaining_steps;
@@ -316,18 +364,21 @@ void MessageHandler::processMove(std::unique_ptr<ClientMessage> request, std::un
 	if (r == 0)
 	{
 		response->msg_id = e_invalid_action;
+		notifyPlayer(room, std::move(response), player_id);
 		return;
 	}
 	uint_fast8_t op = request->optional;
 	if (op > 3)
 	{
 		response->msg_id = e_invalid_action;
+		notifyPlayer(room, std::move(response), player_id);
 		return;
 	}
 	Direction d = (Direction)op;
 	if (board.intersectionDirection(room->position[player_id], room->direction[player_id]) != d)
 	{
 		response->msg_id = e_invalid_action;
+		notifyPlayer(room, std::move(response), player_id);
 		return;
 	}
 	response->data = (unsigned char*)std::calloc(2, sizeof(char));
@@ -339,24 +390,28 @@ void MessageHandler::processMove(std::unique_ptr<ClientMessage> request, std::un
 	return;
 }
 
-void MessageHandler::processRollDice(std::unique_ptr<ClientMessage> request, std::unique_ptr<ServerMessage>& response, std::shared_ptr<Room>& room, uint_fast8_t player_id)
+void MessageHandler::processRollDice(std::unique_ptr<ClientMessage> request, std::shared_ptr<Room>& room, uint_fast8_t player_id)
 {
+	auto response = std::make_unique<ServerMessage>();
 	// verifica se o jogo começou
 	if (room->round == 0)
 	{
 		response->msg_id = e_game_not_started;
+		notifyPlayer(room, std::move(response), player_id);
 		return;
 	}
 	// verifica se e a vez do player
 	if (room->whose_turn != player_id)
 	{
 		response->msg_id = e_not_your_turn;
+		notifyPlayer(room, std::move(response), player_id);
 		return;
 	}
 	// verifica se o player ainda tem passos
 	if (room->player_remaining_steps != 0)
 	{
 		response->msg_id = e_invalid_action;
+		notifyPlayer(room, std::move(response), player_id);
 		return;
 	}
 	// rola o dado
@@ -391,6 +446,17 @@ void MessageHandler::executeMovements(std::unique_ptr<ClientMessage> request, st
 	response->data[1] = coins;
 	room->coins[player_id] += coins;
 	room->stat_coins[player_id] += coins;
+	
+	// checa se o player pode comprar batata
+	if (odio.canBuy)
+	{
+		response->msg_id = r_can_buy_batata;
+	}
+	if (odio.isIntersection)
+	{
+		response->msg_id = r_roll_dice_intersect;
+	}
+	notifyPlayer(room, std::move(response), player_id);
 	// notifica a sala
 	auto move = std::make_unique<ServerMessage>();
 	move->msg_id = n_move;
@@ -399,55 +465,53 @@ void MessageHandler::executeMovements(std::unique_ptr<ClientMessage> request, st
 	move->data[0] = pos;
 	move->data[1] = coins;
 	notifyRoom(room, std::move(move), player_id);
-	// checa se o player pode comprar batata
-	if (odio.canBuy)
+	if (odio.isIntersection || odio.canBuy)
 	{
-		response->msg_id = r_can_buy_batata;
-		return;
-	}
-	if (odio.isIntersection)
-	{
-		response->msg_id = r_roll_dice_intersect;
 		return;
 	}
 	// passa a vez
+	room->player_remaining_steps = 0;
 	room->whose_turn = (room->whose_turn + 1) % room->player_count;
 	if (room->whose_turn == room->player_count)
 	{
 		room->round++;
 		room->minigame = MinigamesFactory::createMinigame((MinigamesEnum)((std::rand() % 3) + 1));
 	}
-	room->player_remaining_steps = 0;
 	// notifica o proximo player
 	auto turn = std::make_unique<ServerMessage>();
 	turn->msg_id = n_turn_start;
 	MessageHandler::notifyPlayer(room, std::move(turn), room->whose_turn);
 }
 
-void MessageHandler::processBuyBatata(std::unique_ptr<ClientMessage> request, std::unique_ptr<ServerMessage>& response, std::shared_ptr<Room>& room, uint_fast8_t player_id)
+void MessageHandler::processBuyBatata(std::unique_ptr<ClientMessage> request, std::shared_ptr<Room>& room, uint_fast8_t player_id)
 {
+	auto response = std::make_unique<ServerMessage>();
 	// verifica se o jogo começou
 	if (room->round == 0)
 	{
 		response->msg_id = e_game_not_started;
+		notifyPlayer(room, std::move(response), player_id);
 		return;
 	}
 	// verifica se e a vez do player
 	if (room->whose_turn != player_id)
 	{
 		response->msg_id = e_not_your_turn;
+		notifyPlayer(room, std::move(response), player_id);
 		return;
 	}
 	// verifica se o player está na posicao certa
 	if (!board.isBatata(room->position[player_id]))
 	{
 		response->msg_id = e_invalid_action;
+		notifyPlayer(room, std::move(response), player_id);
 		return;
 	}
 	// verifica se o player tem moedas suficientes
 	if (room->coins[player_id] < 20)
 	{
 		response->msg_id = e_invalid_action;
+		notifyPlayer(room, std::move(response), player_id);
 		return;
 	}
 	// compra a batata
@@ -460,23 +524,23 @@ void MessageHandler::processBuyBatata(std::unique_ptr<ClientMessage> request, st
 	buy->data_size = 1;
 	buy->data[0] = player_id;
 	notifyRoom(room, std::move(buy), player_id);
-	// passa a vez
-	room->whose_turn = (room->whose_turn + 1) % room->player_count;
-	room->player_remaining_steps = 0;
-	// notifica o proximo player
-	auto turn = std::make_unique<ServerMessage>();
-	turn->msg_id = n_turn_start;
-	MessageHandler::notifyPlayer(room, std::move(turn), room->whose_turn);
+	response->msg_id = r_ok;
+	response->data = (unsigned char*)std::calloc(2, sizeof(char));
+	MessageHandler::executeMovements(std::move(request), response, room, player_id);
 	return;
 }
 
-void MessageHandler::processMinigame(std::unique_ptr<ClientMessage> request, std::unique_ptr<ServerMessage>& response, std::shared_ptr<Room>& room, uint_fast8_t player_id)
+void MessageHandler::processMinigame(std::unique_ptr<ClientMessage> request, std::shared_ptr<Room>& room, uint_fast8_t player_id)
 {
+	auto response = std::make_unique<ServerMessage>();
 	if (!room->minigame) {
 		response->msg_id = e_not_in_minigame;
+		notifyPlayer(room, std::move(response), player_id);
 		return;
 	}
+	response->msg_id = r_ok;
 	room->minigame->processMessage(std::move(request), response, room, player_id);
+	notifyPlayer(room, std::move(response), player_id);
 	if (!room->minigame->isFinished())
 	{
 		return;
@@ -484,9 +548,7 @@ void MessageHandler::processMinigame(std::unique_ptr<ClientMessage> request, std
 	room->minigame.reset();
 	room->whose_turn = 0;
 	room->player_remaining_steps = 0;
-	auto turn = std::make_unique<ServerMessage>();
-	turn->msg_id = n_turn_start;
-	MessageHandler::notifyPlayer(room, std::move(turn), room->whose_turn);
+	
 	std::array<bool, MAX_PLAYERS> winner = room->minigame->getWinner();
 	auto end = std::make_unique<ServerMessage>();
 	// o tamanho do vetor de vencedores e o numero de bytes necessarios para armazenar todos os vencedores
@@ -507,6 +569,7 @@ void MessageHandler::processMinigame(std::unique_ptr<ClientMessage> request, std
 			room->stat_coins[i] += PRIZE_MINIGAME;
 		}
 	}
+	notifyRoom(room, std::move(end), MAX_PLAYERS);
 }
 
 void MessageHandler::startGame(std::shared_ptr<Room>& room)
@@ -528,24 +591,84 @@ void MessageHandler::startGame(std::shared_ptr<Room>& room)
 
 void MessageHandler::endGame(std::shared_ptr<Room>& room)
 {
-	bool have_valid_socket = true;
+	LOG("ENDING THE GAME IN: " << room->name)
+	bool have_valid_socket = false;
+	bool have_invalid_socket = false;
 	for (uint_fast8_t i = 0; i < room->player_count; i++)
 	{
-		if (room->players[i] != INVALID_SOCKET)
+		if (room->players[i] == INVALID_SOCKET)
 		{
-			have_valid_socket = false;
-			break;
+			have_invalid_socket = true;
+			continue;
 		}
+		have_valid_socket = true;
 	}
 	if (have_valid_socket)
 	{
 		// notifica a sala
-		auto end = std::make_unique<ServerMessage>();
-		end->msg_id = n_game_end;
-		end->data = (unsigned char*)std::calloc(room->player_count, sizeof(PlayerPodium));
-		end->data_size = 1;
-		end->data[0] = 1;
-		notifyRoom(room, std::move(end), MAX_PLAYERS);
+		uint_fast8_t player_count = room->player_count;
+		auto batata_bonus = BatataBonus::emotes; //(BatataBonus)(std::rand() % NOF_BONUS);
+		auto podium = std::vector<std::pair<uint_fast8_t, uint_fast64_t>>(player_count);
+		for (uint_fast8_t i = 0; i < player_count; i++)
+		{
+			uint_fast64_t v;
+			switch (batata_bonus)
+			{
+			case coins:
+				v = room->stat_coins[i];
+				break;
+			case steps:
+				v = room->stat_steps[i];
+				break;
+			case emotes:
+				v = room->stat_emotes[i];
+				break;
+			default:
+				LOG("Batata bonus selecionado aleatoriamente é inválido");
+				break;
+			}
+			podium[i] = std::make_pair(i, v);
+		}
+		std::sort(podium.begin(), podium.end(), [](std::pair<uint_fast8_t, uint_fast64_t> a, std::pair<uint_fast8_t, uint_fast64_t> b) {
+			return a.second > b.second;
+		});
+		unsigned char* buf = (unsigned char*)std::calloc(player_count, PODIUM_SIZE);
+		if (buf == NULL)
+		{
+			std::cerr << "CALLOC FALHOU ENTRANDO EM PANICO!!!" << std::endl;
+			WSACleanup();
+			exit(1);
+		}
+		for (uint_fast8_t i = 0; i < player_count; i++)
+		{
+			uint_fast8_t player_id = podium.at(i).first;
+			buf[i * PODIUM_SIZE] = player_id;
+			buf[i * PODIUM_SIZE + 1] = room->batatas[player_id];
+			buf[i * PODIUM_SIZE + 2] = (unsigned char)batata_bonus;
+			std::memcpy(buf + 3 + (i * PODIUM_SIZE), &room->stat_coins[player_id], sizeof(unsigned long long));
+			std::memcpy(buf + 3 + sizeof(unsigned long long) + (i * PODIUM_SIZE), &room->stat_steps[player_id], sizeof(unsigned long long));
+			std::memcpy(buf + 3 + (2*sizeof(unsigned long long)) + (i * PODIUM_SIZE), &room->stat_emotes[player_id], sizeof(unsigned long long));
+		}
+		for (uint_fast8_t i = 0; i < player_count; i++)
+		{
+			SOCKET sock = room->players[i];
+			if (sock == INVALID_SOCKET)
+			{
+				continue;
+			}
+			auto end = std::make_unique<ServerMessage>();
+			end->msg_id = n_game_end;
+			end->data = (unsigned char*)std::calloc(player_count, PODIUM_SIZE);
+			end->data_size = player_count * PODIUM_SIZE;
+			std::memcpy(end->data, buf, player_count * PODIUM_SIZE);
+			MessageHandler::notifySocket(sock, std::move(end));
+			if (have_invalid_socket)
+			{
+				room->players[i] = INVALID_SOCKET;
+				closesocket(sock);
+			}
+		}
+		delete buf;
 	}
 	rooms.erase(room->name);
 	return;

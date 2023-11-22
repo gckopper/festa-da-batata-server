@@ -1,6 +1,7 @@
 #ifndef MESSAGE_TYPES
 #define MESSAGE_TYPES
 #include <WinSock2.h>
+#include <stdint.h>
 #define ROOM_CODE_SIZE 8
 #define SMALL_BUFLEN 9
 #define BIG_BUFLEN 10
@@ -30,19 +31,27 @@ enum MinigamesEnum {
 
 enum Hand { rock = 0, paper = 1, scissors = 2, no = 3 };
 
-struct PlayerPodium {
-	unsigned char player_id;
-	unsigned char batatas;
-	unsigned long long coins;
-	unsigned long long steps;
-	unsigned long long emotes;
-};
+#define NOF_BONUS 3
 
 enum BatataBonus {
 	coins = 0,
 	steps = 1,
 	emotes = 2,
 };
+
+#define PODIUM_SIZE 27
+
+struct PlayerPodium {
+	unsigned char player_id;
+	unsigned char batatas;
+	// enum BatataBonus bonus_type; mas com um tamanho 
+	// indepentende do compilador
+	unsigned char bonus_type;
+	unsigned long long coins;
+	unsigned long long steps;
+	unsigned long long emotes;
+};
+
 
 enum message_id {
 	// to pronto pra jogar
@@ -142,7 +151,7 @@ enum server_message_id {
 
 typedef struct ServerMessage {
 	enum server_message_id msg_id;
-	unsigned char data_size;
+	unsigned char data_size = 0;
 	unsigned char* data;
 } ServerMessage;
 

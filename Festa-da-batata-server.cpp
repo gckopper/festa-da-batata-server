@@ -3,6 +3,7 @@
 
 #include "Game.h"
 
+#include "Logger.h"
 
 #define DEFAULT_PORT "27015"
 #define MAX_CLIENTS 128
@@ -14,7 +15,7 @@ int main()
     WSADATA wsaData;
     int iResult;
     iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
-    if (iResult != NO_ERROR) {
+    if (iResult != 0) {
 		printf("Erro ao inicializar o Winsock: %d\n", iResult);
 		return 1;
 	}
@@ -60,9 +61,7 @@ int main()
 	fdArray[0].fd = ListenSocket;
 	fdArray[0].events = POLLRDNORM;
 	unsigned int fdCount = 1;
-	unsigned int deleted = 0;
 	while (true) {
-		deleted = 0;
 		int nSocks = WSAPoll(fdArray, MAX_CLIENTS, -1);
 		if (nSocks == SOCKET_ERROR) {
 			printf("Erro ao chamar WSAPoll: %ld\n", WSAGetLastError());
@@ -70,20 +69,27 @@ int main()
 			WSACleanup();
 			return 1;
 		}
-		for (int i = fdCount - 1; i > 1; --i) {
+		for (int i = fdCount-1; i > 0; --i) {
+			if (fdArray[i].revents == 0) {
+				continue;
+			}
+			if (fdArray[i].revents & POLLHUP || fdArray[i].revents & POLLERR || fdArray[i].revents & POLLNVAL) {
+				closesocket(fdArray[i].fd);
+				fdArray[i].fd = fdArray[fdCount-1].fd;
+				fdArray[fdCount - 1].fd = INVALID_SOCKET;
+				fdCount--;
+				LOG("Cliente disconectado total atual: " << fdCount);
+				continue;
+			}
 			if (fdArray[i].revents & POLLRDNORM) {
+				LOG("MESSAGEM CHEGANDO");
 				game.handleClient(fdArray[i].fd);
 				continue;
 			}
-			if (fdArray[i].revents & POLLHUP && fdArray[i].revents & POLLERR) {
-				closesocket(fdArray[i].fd);
-				fdArray[i].fd = fdArray[fdCount-deleted].fd;
-				fdArray[fdCount - deleted].fd = INVALID_SOCKET;
-				deleted++;
-				fdCount--;
-			}
+			LOG("TEMOS UM SOCKET ESQUISITO: " << fdArray[i].revents);
+			continue;
 		}
-		if (fdArray[0].revents & POLLRDNORM) {
+		if (fdArray[0].revents & POLLRDNORM && fdCount <= MAX_CLIENTS) {
 			ClientSocket = accept(ListenSocket, NULL, NULL);
 			if (ClientSocket == INVALID_SOCKET) {
 				printf("Erro ao aceitar a conexão: %ld\n", WSAGetLastError());
@@ -94,6 +100,11 @@ int main()
 			fdArray[fdCount].fd = ClientSocket;
 			fdArray[fdCount].events = POLLRDNORM;
 			fdCount++;
+			// pega a porta do cliente
+			sockaddr_in addr{};
+			int len = sizeof(addr);
+			getpeername(ClientSocket, (sockaddr*)&addr, &len);
+			LOG("novo cliente total atual: " << fdCount << " port=" << addr.sin_port);
 		}
 	}
 }

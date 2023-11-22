@@ -376,7 +376,7 @@ void MessageHandler::processMove(std::unique_ptr<ClientMessage> request, std::sh
 	}
 	Direction d = (Direction)op;
 	Direction old_d = room->direction[player_id];
-	if (!board.isValidintersectionDirection(room->position[player_id], d) || d == ((old_d + 1) % 2) + (old_d & 0b10))
+	if (!board.isValidintersectionDirection(room->position[player_id], d) || d != ((old_d + 1) % 2) + (old_d & 0b10))
 	{
 		response->msg_id = e_invalid_action;
 		notifyPlayer(room, std::move(response), player_id);
@@ -449,15 +449,15 @@ void MessageHandler::executeMovements(std::unique_ptr<ClientMessage> request, st
 	room->coins[player_id] += coins;
 	room->stat_coins[player_id] += coins;
 	
+	if (odio.isIntersection && odio.remaining != 0)
+	{
+		LOG("PQ!!!" << (int)room->player_remaining_steps + 0);
+		response->msg_id = r_roll_dice_intersect;
+	}
 	// checa se o player pode comprar batata
 	if (odio.canBuy)
 	{
 		response->msg_id = r_can_buy_batata;
-	}
-	if (odio.isIntersection)
-	{
-		LOG("PQ!!!" << (int)room->player_remaining_steps + 0);
-		response->msg_id = r_roll_dice_intersect;
 	}
 	notifyPlayer(room, std::move(response), player_id);
 	// notifica a sala
@@ -468,17 +468,23 @@ void MessageHandler::executeMovements(std::unique_ptr<ClientMessage> request, st
 	move->data[0] = pos;
 	move->data[1] = coins;
 	notifyRoom(room, std::move(move), player_id);
-	if (odio.isIntersection || odio.canBuy)
+	if ((odio.isIntersection && odio.remaining != 0) || odio.canBuy)
 	{
 		return;
 	}
 	// passa a vez
+	// TODO FIX END OF ROUND DETECTION SYSTEM
 	room->player_remaining_steps = 0;
 	room->whose_turn = (room->whose_turn + 1) % room->player_count;
 	if (room->whose_turn == 0)
 	{
 		room->round++;
 		room->minigame = MinigamesFactory::createMinigame((MinigamesEnum)((std::rand() % 3) + 1));
+	}
+	if (room->round == MAX_ROUNDS)
+	{
+		MessageHandler::endGame(room);
+		return;
 	}
 	// notifica o proximo player
 	auto turn = std::make_unique<ServerMessage>();

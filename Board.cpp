@@ -12,7 +12,7 @@ bool Board::isIntersection(uint_fast8_t pos)
 
 bool Board::isValid(uint_fast8_t x, uint_fast8_t y)
 {
-	return Board::isValid(x + y * BOARD_WIDTH);
+	return x < BOARD_WIDTH && y < BOARD_HEIGHT && Board::isValid(x + y * BOARD_WIDTH);
 }
 
 bool Board::isValid(uint_fast8_t pos)

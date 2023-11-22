@@ -16,6 +16,8 @@
 #define PRIZE_MINIGAME 8
 #define MAX_PLAYERS 4
 
+#define MAX_ROUNDS 5
+
 enum Direction {
 	up = 0,
 	down = 1,

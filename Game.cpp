@@ -115,6 +115,13 @@ void MessageHandler::processMessage(std::unique_ptr<ClientMessage> msg)
 		closesocket(msg->creator);
 		return;
 	}
+	if (room->minigame != nullptr && msg->msg_id != minigame && msg->msg_id != emote)
+	{
+		auto response = std::make_unique<ServerMessage>();
+		response->msg_id = e_invalid_action;
+		MessageHandler::notifySocket(msg->creator, std::move(response));
+		return;
+	}
 	switch (msg->msg_id)
 	{
 	case ready:
@@ -473,13 +480,19 @@ void MessageHandler::executeMovements(std::unique_ptr<ClientMessage> request, st
 		return;
 	}
 	// passa a vez
-	// TODO FIX END OF ROUND DETECTION SYSTEM
 	room->player_remaining_steps = 0;
 	room->whose_turn = (room->whose_turn + 1) % room->player_count;
 	if (room->whose_turn == 0)
 	{
+		MinigamesEnum me = (MinigamesEnum)((std::rand() % NOF_MINIGAMES) + 1);
 		room->round++;
-		room->minigame = MinigamesFactory::createMinigame((MinigamesEnum)((std::rand() % 3) + 1));
+		room->minigame = MinigamesFactory::createMinigame(me);
+		auto move = std::make_unique<ServerMessage>();
+		move->msg_id = n_minigame;
+		move->data = (unsigned char*)std::calloc(1, sizeof(char));
+		move->data_size = 1;
+		move->data[0] = me;
+		notifyRoom(room, std::move(move), MAX_PLAYERS);
 	}
 	if (room->round == MAX_ROUNDS)
 	{
@@ -620,7 +633,7 @@ void MessageHandler::endGame(std::shared_ptr<Room>& room)
 		// notifica a sala
 		uint_fast8_t player_count = room->player_count;
 		auto batata_bonus = BatataBonus::emotes; //(BatataBonus)(std::rand() % NOF_BONUS);
-		auto podium = std::vector<std::pair<uint_fast8_t, uint_fast64_t>>(player_count);
+		auto podium = std::vector<std::tuple<uint_fast8_t, uint_fast8_t, uint_fast8_t, uint_fast64_t>>(player_count);
 		for (uint_fast8_t i = 0; i < player_count; i++)
 		{
 			uint_fast64_t v;
@@ -639,10 +652,25 @@ void MessageHandler::endGame(std::shared_ptr<Room>& room)
 				LOG("Batata bonus selecionado aleatoriamente é inválido");
 				break;
 			}
-			podium[i] = std::make_pair(i, v);
+			podium[i] = std::make_tuple(i, room->batatas[i], room->coins[i], v);
 		}
-		std::sort(podium.begin(), podium.end(), [](std::pair<uint_fast8_t, uint_fast64_t> a, std::pair<uint_fast8_t, uint_fast64_t> b) {
-			return a.second > b.second;
+		std::sort(podium.begin(), podium.end(), [](
+				std::tuple<uint_fast8_t, uint_fast8_t, uint_fast8_t, uint_fast64_t> a,
+				std::tuple<uint_fast8_t, uint_fast8_t, uint_fast8_t, uint_fast64_t> b) 
+			{
+			uint_fast8_t b1 = std::get<1>(a);
+			uint_fast8_t b2 = std::get<1>(b);
+			if (b1 != b2)
+			{
+				return b1 > b2;
+			}
+			uint_fast8_t c2 = std::get<2>(b);
+			uint_fast8_t c1 = std::get<2>(a);
+			if (c1 != c2)
+			{
+				return c1 > c2;
+			}
+			return std::get<3>(a) > std::get<3>(b);
 		});
 		unsigned char* buf = (unsigned char*)std::calloc(player_count, PODIUM_SIZE);
 		if (buf == NULL)
@@ -653,9 +681,9 @@ void MessageHandler::endGame(std::shared_ptr<Room>& room)
 		}
 		for (uint_fast8_t i = 0; i < player_count; i++)
 		{
-			uint_fast8_t player_id = podium.at(i).first;
+			uint_fast8_t player_id = std::get<0>(podium.at(i));
 			buf[i * PODIUM_SIZE] = player_id;
-			buf[i * PODIUM_SIZE + 1] = room->batatas[player_id];
+			buf[i * PODIUM_SIZE + 1] = std::get<1>(podium.at(i));
 			buf[i * PODIUM_SIZE + 2] = (unsigned char)batata_bonus;
 			std::memcpy(buf + 3 + (i * PODIUM_SIZE), &room->stat_coins[player_id], sizeof(unsigned long long));
 			std::memcpy(buf + 3 + sizeof(unsigned long long) + (i * PODIUM_SIZE), &room->stat_steps[player_id], sizeof(unsigned long long));

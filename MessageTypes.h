@@ -25,6 +25,8 @@ enum Direction {
 	right = 3,
 };
 
+#define NOF_MINIGAMES 3
+
 enum MinigamesEnum {
 	rock_paper_scissors = 1,
 	cut_the_wire = 2,

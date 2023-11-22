@@ -61,6 +61,7 @@ int main()
 	fdArray[0].fd = ListenSocket;
 	fdArray[0].events = POLLRDNORM;
 	unsigned int fdCount = 1;
+	std::srand(8);
 	while (true) {
 		int nSocks = WSAPoll(fdArray, MAX_CLIENTS, -1);
 		if (nSocks == SOCKET_ERROR) {

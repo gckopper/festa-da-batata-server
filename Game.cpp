@@ -381,10 +381,10 @@ void MessageHandler::processMove(std::unique_ptr<ClientMessage> request, std::sh
 		notifyPlayer(room, std::move(response), player_id);
 		return;
 	}
+	room->direction[player_id] = d;
 	response->data = (unsigned char*)std::calloc(2, sizeof(char));
 	response->data_size = 2;
 	response->msg_id = r_move;
-
 	MessageHandler::executeMovements(std::move(request), response, room, player_id);
 
 	return;
@@ -431,6 +431,7 @@ void MessageHandler::executeMovements(std::unique_ptr<ClientMessage> request, st
 	Odio odio = board.executeMove(room->position[player_id], r, room->direction[player_id], room->coins[player_id] > 20);
 	room->direction[player_id] = odio.direction;
 	room->player_remaining_steps = odio.remaining;
+	LOG("PASSOS: " << (int)r << " - " << (int)odio.remaining);
 	// se isso der underflow tem um bug em board.cpp
 	room->stat_steps[player_id] += r - odio.remaining;
 	uint_fast8_t pos = odio.x + odio.y * BOARD_WIDTH;
@@ -454,6 +455,7 @@ void MessageHandler::executeMovements(std::unique_ptr<ClientMessage> request, st
 	}
 	if (odio.isIntersection)
 	{
+		LOG("PQ!!!" << (int)room->player_remaining_steps + 0);
 		response->msg_id = r_roll_dice_intersect;
 	}
 	notifyPlayer(room, std::move(response), player_id);
@@ -472,7 +474,7 @@ void MessageHandler::executeMovements(std::unique_ptr<ClientMessage> request, st
 	// passa a vez
 	room->player_remaining_steps = 0;
 	room->whose_turn = (room->whose_turn + 1) % room->player_count;
-	if (room->whose_turn == room->player_count)
+	if (room->whose_turn == 0)
 	{
 		room->round++;
 		room->minigame = MinigamesFactory::createMinigame((MinigamesEnum)((std::rand() % 3) + 1));
@@ -596,6 +598,9 @@ void MessageHandler::endGame(std::shared_ptr<Room>& room)
 	bool have_invalid_socket = false;
 	for (uint_fast8_t i = 0; i < room->player_count; i++)
 	{
+		LOG("Player " << (int)i << " batata: " << (int)room->batatas[i]);
+		LOG("Player " << (int)i << " coins: " << (int)room->coins[i]);
+		LOG("Player " << (int)i << " position: " << (int)room->position[i]);
 		if (room->players[i] == INVALID_SOCKET)
 		{
 			have_invalid_socket = true;

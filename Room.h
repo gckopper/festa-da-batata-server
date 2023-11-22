@@ -18,8 +18,8 @@ struct Room {
 	std::array<bool, MAX_PLAYERS> ready = { false };
 	std::array<uint_fast8_t, MAX_PLAYERS> coins = { 0 };
 	std::array<uint_fast8_t, MAX_PLAYERS> batatas = { 0 };
-	std::array<Direction, MAX_PLAYERS> direction = { Direction::left };
-	std::array<uint_fast8_t, MAX_PLAYERS> position = { 32+3 };
+	std::array<Direction, MAX_PLAYERS> direction = { Direction::up };
+	std::array<uint_fast8_t, MAX_PLAYERS> position = { 0 };
 	std::array<uint_fast64_t, MAX_PLAYERS> stat_emotes = { 0 };
 	std::array<uint_fast64_t, MAX_PLAYERS> stat_steps = { 0 };
 	std::array<uint_fast64_t, MAX_PLAYERS> stat_coins = { 0 };

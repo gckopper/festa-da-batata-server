@@ -375,7 +375,8 @@ void MessageHandler::processMove(std::unique_ptr<ClientMessage> request, std::sh
 		return;
 	}
 	Direction d = (Direction)op;
-	if (board.intersectionDirection(room->position[player_id], room->direction[player_id]) != d)
+	Direction old_d = room->direction[player_id];
+	if (!board.isValidintersectionDirection(room->position[player_id], d) || d == ((old_d + 1) % 2) + (old_d & 0b10))
 	{
 		response->msg_id = e_invalid_action;
 		notifyPlayer(room, std::move(response), player_id);

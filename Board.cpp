@@ -20,7 +20,7 @@ bool Board::isValid(uint_fast8_t pos)
 	return pos < BOARD_SIZE && board[pos] != 0;
 }
 
-Direction Board::intersectionDirection(uint_fast8_t x, uint_fast8_t y, Direction current)
+Direction Board::turnCorner(uint_fast8_t x, uint_fast8_t y, Direction current)
 {
 	if (current == up || current == down)
 	{
@@ -35,9 +35,30 @@ Direction Board::intersectionDirection(uint_fast8_t x, uint_fast8_t y, Direction
 	return down;
 }
 
-Direction Board::intersectionDirection(uint_fast8_t pos, Direction current)
+Direction Board::turnCorner(uint_fast8_t pos, Direction current)
 {
-	return Board::intersectionDirection(pos % BOARD_WIDTH, pos / BOARD_WIDTH, current);
+	return Board::turnCorner(pos % BOARD_WIDTH, pos / BOARD_WIDTH, current);
+}
+
+bool Board::isValidintersectionDirection(uint_fast8_t x, uint_fast8_t y, Direction d)
+{
+	switch (d)
+	{
+		case up:
+			return Board::isValid(x, y + 1);
+		case down:
+			return Board::isValid(x, y - 1);
+		case left:
+			return Board::isValid(x - 1, y);
+		case right:
+			return Board::isValid(x + 1, y);
+	}
+	return false;
+}
+
+bool Board::isValidintersectionDirection(uint_fast8_t pos, Direction d)
+{
+	return Board::isValidintersectionDirection(pos % BOARD_WIDTH, pos / BOARD_WIDTH, d);
 }
 
 bool Board::isBatata(uint_fast8_t pos)
@@ -63,7 +84,7 @@ Odio Board::executeMove(uint_fast8_t pos, uint_fast8_t distance, Direction curre
 	{
 	case up:
 		ny = y + distance;
-		willIntersect = willIntersectX && ny > 2 && y <= 2;
+		willIntersect = willIntersectX && ny >= 2 && y < 2;
 		if (ny >= BOARD_HEIGHT)
 		{
 			remaining = ny - BOARD_HEIGHT;
@@ -83,7 +104,7 @@ Odio Board::executeMove(uint_fast8_t pos, uint_fast8_t distance, Direction curre
 			remaining = distance - y;
 			ny = 0;
 		}
-		willIntersect = willIntersectX && ny < 2 && y >= 2;
+		willIntersect = willIntersectX && ny <= 2 && y > 2;
 		if (willIntersect)
 		{
 			remaining = (y - 2);
@@ -99,7 +120,7 @@ Odio Board::executeMove(uint_fast8_t pos, uint_fast8_t distance, Direction curre
 			remaining = distance - x;
 			nx = 0;
 		}
-		if (can_buy && willIntersectY && x > BATATA_LOCX && nx <= BATATA_LOCX)
+		if (can_buy && willIntersectY && x >= BATATA_LOCX && nx < BATATA_LOCX)
 		{
 			willIntersect = true;
 			remaining = x - 4;
@@ -115,7 +136,7 @@ Odio Board::executeMove(uint_fast8_t pos, uint_fast8_t distance, Direction curre
 			remaining = nx - BOARD_WIDTH;
 			nx = BOARD_WIDTH - 1;
 		}
-		if (can_buy && willIntersectY && x < 4 && nx >= 4)
+		if (can_buy && willIntersectY && x <= BATATA_LOCX && nx > BATATA_LOCX)
 		{
 			willIntersect = true;
 			remaining = nx - 4;
@@ -130,7 +151,7 @@ Odio Board::executeMove(uint_fast8_t pos, uint_fast8_t distance, Direction curre
 	}
 	if (remaining > 0)
 	{
-		return Board::executeMove(nx+ny* BOARD_WIDTH, remaining, Board::intersectionDirection(nx, ny, current), can_buy);
+		return Board::executeMove(nx+ny* BOARD_WIDTH, remaining, Board::turnCorner(nx, ny, current), can_buy);
 	}
 	return { nx, ny, current, false, 0 , false};
 }

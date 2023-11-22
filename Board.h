@@ -25,8 +25,10 @@ class Board
 		bool isIntersection(uint_fast8_t pos);
 		bool isValid(uint_fast8_t x, uint_fast8_t y);
 		bool isValid(uint_fast8_t pos);
-		Direction intersectionDirection(uint_fast8_t x, uint_fast8_t y, Direction current);
-		Direction intersectionDirection(uint_fast8_t pos, Direction current);
+		Direction turnCorner(uint_fast8_t x, uint_fast8_t y, Direction current);
+		Direction turnCorner(uint_fast8_t pos, Direction current);
+		bool isValidintersectionDirection(uint_fast8_t x, uint_fast8_t y, Direction d);
+		bool isValidintersectionDirection(uint_fast8_t pos, Direction d);
 		bool isBatata(uint_fast8_t pos);
 		Odio executeMove(uint_fast8_t pos, uint_fast8_t distance, Direction current, bool can_buy);
 };

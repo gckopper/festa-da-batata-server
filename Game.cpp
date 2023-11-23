@@ -473,7 +473,7 @@ void MessageHandler::executeMovements(std::unique_ptr<ClientMessage> request, st
 	move->data = (unsigned char*)std::calloc(2, sizeof(char));
 	move->data_size = 2;
 	move->data[0] = pos;
-	move->data[1] = coins;
+	move->data[1] = room->coins[player_id];
 	notifyRoom(room, std::move(move), player_id);
 	if ((odio.isIntersection && odio.remaining != 0) || odio.canBuy)
 	{
@@ -502,7 +502,7 @@ void MessageHandler::executeMovements(std::unique_ptr<ClientMessage> request, st
 	// notifica o proximo player
 	auto turn = std::make_unique<ServerMessage>();
 	turn->msg_id = n_turn_start;
-	MessageHandler::notifyPlayer(room, std::move(turn), room->whose_turn);
+	MessageHandler::notifyRoom(room, std::move(turn), MAX_PLAYERS);
 }
 
 void MessageHandler::processBuyBatata(std::unique_ptr<ClientMessage> request, std::shared_ptr<Room>& room, uint_fast8_t player_id)

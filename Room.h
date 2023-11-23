@@ -6,6 +6,7 @@
 
 extern "C" {
 #include "MessageTypes.h"
+#include <WinSock2.h>
 }
 
 // forward declaration

@@ -1,6 +1,5 @@
 #ifndef MESSAGE_TYPES
 #define MESSAGE_TYPES
-#include <WinSock2.h>
 #include <stdint.h>
 #define ROOM_CODE_SIZE 8
 #define SMALL_BUFLEN 9
@@ -88,8 +87,11 @@ enum message_id {
 };
 
 typedef struct ClientMessage {
-	SOCKET creator;
-	unsigned char room_code[ROOM_CODE_SIZE];
+	#ifdef SERVER 
+	unsigned long long creator;
+	#endif
+	// has size ROOM_CODE_SIZE
+	unsigned char* room_code;
 	enum message_id msg_id;
 	unsigned char optional;
 } ClientMessage;
@@ -155,7 +157,7 @@ enum server_message_id {
 
 typedef struct ServerMessage {
 	enum server_message_id msg_id;
-	unsigned char data_size = 0;
+	unsigned char data_size;
 	unsigned char* data;
 } ServerMessage;
 

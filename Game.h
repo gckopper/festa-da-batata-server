@@ -25,7 +25,8 @@ struct Room;
 class MessageHandler
 {
 private:
-	std::unordered_map<std::string, const std::shared_ptr<Room>> rooms;
+	std::unordered_map<std::string, std::shared_ptr<Room>> rooms;
+	std::unordered_map<SOCKET, std::shared_ptr<Room>> sock_to_rooms;
 	Board board;
 public:
 
@@ -51,5 +52,6 @@ public:
 
 	void startGame(std::shared_ptr<Room>& room);
 	void endGame(std::shared_ptr<Room> &room);
+	void deleteRoomAndEndGame(SOCKET sock);
 };
 

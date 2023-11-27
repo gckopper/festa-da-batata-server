@@ -55,7 +55,8 @@ struct PlayerPodium {
 	unsigned long long emotes;
 };
 
-
+// mensagens acima de 127 são consideradas mensagens longas (com um 
+// byte extra).
 enum message_id {
 	// to pronto pra jogar
 	ready      = 0,
@@ -71,6 +72,9 @@ enum message_id {
 
 	// join
 	join       = 4,
+
+	// leave
+	leave      = 5,
 
 	// MENSAGENS COM OPCIONAL
 	// Pode ser usado pra escolher um resultado 
@@ -131,6 +135,9 @@ enum server_message_id {
 	r_can_buy_batata = 69,
 	// resposta a um move
 	r_move = 70,
+	// confirma que o player entrou na sala e manda
+	// quantos jogadores já estão na sala
+	r_joined = 71,
 	
 	// mensagens de erro (128-255)
 	// erro ao tentar join e sala cheia

@@ -8,6 +8,7 @@
 #define DEFAULT_PORT "27015"
 #define MAX_CLIENTS 128
 
+// Main que na realidade é responsável por abrir o socket
 int main()
 {
     std::cout << "Hello World!\n";
@@ -61,7 +62,15 @@ int main()
 	fdArray[0].fd = ListenSocket;
 	fdArray[0].events = POLLRDNORM;
 	unsigned int fdCount = 1;
-	std::srand(8);
+	// Escolhe uma seed aleatória quando fora do modo de debug
+	// Alguns testes dependem na seed ser 8 e são rodados em 
+	// modo de debug
+#ifdef _DEBUG
+	uint64_t seed = 8;
+#else
+	uint64_t seed = time(NULL);
+#endif
+	std::srand(seed);
 	while (true) {
 		int nSocks = WSAPoll(fdArray, MAX_CLIENTS, -1);
 		if (nSocks == SOCKET_ERROR) {
@@ -75,10 +84,12 @@ int main()
 				continue;
 			}
 			if (fdArray[i].revents & POLLHUP || fdArray[i].revents & POLLERR || fdArray[i].revents & POLLNVAL) {
+				game.deleteRoomAndEndGame(fdArray[i].fd);
 				closesocket(fdArray[i].fd);
 				fdArray[i].fd = fdArray[fdCount-1].fd;
 				fdArray[fdCount - 1].fd = INVALID_SOCKET;
 				fdCount--;
+				// GARBAGE COLLECTION
 				LOG("Cliente disconectado total atual: " << fdCount);
 				continue;
 			}

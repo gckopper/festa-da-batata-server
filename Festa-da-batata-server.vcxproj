@@ -132,7 +132,7 @@
     <ClCompile Include="Board.cpp" />
     <ClCompile Include="CoinFlip.cpp" />
     <ClCompile Include="CutTheWire.cpp" />
-    <ClCompile Include="Festa-da-batata-server.cpp" />
+    <ClCompile Include="FestaDaBatataServer.cpp" />
     <ClCompile Include="Game.cpp" />
     <ClCompile Include="MinigamesFactory.cpp" />
     <ClCompile Include="RockPaperScissors.cpp" />

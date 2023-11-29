@@ -43,7 +43,7 @@ enum BatataBonus {
 };
 // tamanho que a estrutura vai ter durante o transporte na rede
 // pode, ou não, ser igual ao tamanho em memoria durante a execução
-#define PODIUM_SIZE 28
+#define PODIUM_SIZE 12
 
 struct PlayerPodium {
 	unsigned char player_id;
@@ -52,9 +52,7 @@ struct PlayerPodium {
 	// enum BatataBonus bonus_type; mas com um tamanho 
 	// indepentende do compilador
 	unsigned char bonus_type;
-	unsigned long long coins;
-	unsigned long long steps;
-	unsigned long long emotes;
+	unsigned long long bonus;
 };
 
 // mensagens acima de 127 são consideradas mensagens longas (com um 

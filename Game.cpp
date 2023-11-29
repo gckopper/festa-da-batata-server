@@ -642,7 +642,7 @@ void MessageHandler::endGame(std::shared_ptr<Room>& room)
 
 	// notifica a sala
 	uint_fast8_t player_count = room->player_count;
-	auto batata_bonus = BatataBonus::emotes; //(BatataBonus)(std::rand() % NOF_BONUS);
+	auto batata_bonus = (BatataBonus)(std::rand() % NOF_BONUS);
 	auto podium = std::vector<std::tuple<uint_fast8_t, uint_fast8_t, uint_fast8_t, uint_fast64_t>>(player_count);
 	std::array<uint_fast64_t, MAX_PLAYERS> values;
 	switch (batata_bonus)
@@ -713,9 +713,7 @@ void MessageHandler::endGame(std::shared_ptr<Room>& room)
 		buf[i * PODIUM_SIZE + 1] = std::get<1>(podium.at(i));
 		buf[i * PODIUM_SIZE + 2] = (unsigned char)std::get<2>(podium.at(i));
 		buf[i * PODIUM_SIZE + 3] = (unsigned char)batata_bonus;
-		std::memcpy(buf + 4 + (i * PODIUM_SIZE), &room->stat_coins[player_id], sizeof(unsigned long long));
-		std::memcpy(buf + 4 + sizeof(unsigned long long) + (i * PODIUM_SIZE), &room->stat_steps[player_id], sizeof(unsigned long long));
-		std::memcpy(buf + 4 + (2*sizeof(unsigned long long)) + (i * PODIUM_SIZE), &room->stat_emotes[player_id], sizeof(unsigned long long));
+		std::memcpy(buf + 4 + (i * PODIUM_SIZE), &std::get<3>(podium.at(i)), sizeof(unsigned long long));
 	}
 	for (uint_fast8_t i = 0; i < player_count; i++)
 	{

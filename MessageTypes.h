@@ -41,12 +41,14 @@ enum BatataBonus {
 	steps = 1,
 	emotes = 2,
 };
-
-#define PODIUM_SIZE 27
+// tamanho que a estrutura vai ter durante o transporte na rede
+// pode, ou não, ser igual ao tamanho em memoria durante a execução
+#define PODIUM_SIZE 28
 
 struct PlayerPodium {
 	unsigned char player_id;
 	unsigned char batatas;
+	unsigned char current_coins;
 	// enum BatataBonus bonus_type; mas com um tamanho 
 	// indepentende do compilador
 	unsigned char bonus_type;

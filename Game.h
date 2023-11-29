@@ -45,7 +45,7 @@ public:
 	void processEmote(std::unique_ptr<ClientMessage> request, std::shared_ptr<Room> &room, uint_fast8_t player_id);
 	void processJoin(std::unique_ptr<ClientMessage> request, std::shared_ptr<Room>& room, uint_fast8_t player_id);
 	void processMove(std::unique_ptr<ClientMessage> request, std::shared_ptr<Room>& room, uint_fast8_t player_id);
-	void processRollDice(std::unique_ptr<ClientMessage> request, std::shared_ptr<Room>& room, uint_fast8_t player_id);
+	void processDieRoll(std::unique_ptr<ClientMessage> request, std::shared_ptr<Room>& room, uint_fast8_t player_id);
 	void executeMovements(std::unique_ptr<ClientMessage> request, std::unique_ptr<ServerMessage>& response, std::shared_ptr<Room>& room, uint_fast8_t player_id);
 	void processBuyBatata(std::unique_ptr<ClientMessage> request, std::shared_ptr<Room>& room, uint_fast8_t player_id);
 	void processMinigame(std::unique_ptr<ClientMessage> request, std::shared_ptr<Room>& room, uint_fast8_t player_id);

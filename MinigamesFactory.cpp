@@ -11,6 +11,7 @@ std::unique_ptr<Minigame> MinigamesFactory::createMinigame(MinigamesEnum e)
 		return std::make_unique<CutTheWire>();
 		break;
 	case coin_flip:
+		return std::make_unique<CoinFlip>();
 		break;
 	default:
 		break;

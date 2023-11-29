@@ -87,7 +87,7 @@ Odio Board::executeMove(uint_fast8_t pos, uint_fast8_t distance, Direction curre
 		willIntersect = willIntersectX && ny >= 2 && y < 2;
 		if (ny >= BOARD_HEIGHT)
 		{
-			remaining = ny - BOARD_HEIGHT;
+			remaining = ny - (BOARD_HEIGHT - 1);
 			ny = BOARD_HEIGHT - 1;
 		}
 		if (willIntersect)
@@ -98,7 +98,7 @@ Odio Board::executeMove(uint_fast8_t pos, uint_fast8_t distance, Direction curre
 		break;
 	case down:
 		ny = y - distance;
-		// ny vai dar underflow
+		// ny pode dar underflow
 		if (distance > y)
 		{
 			remaining = distance - y;
@@ -113,7 +113,7 @@ Odio Board::executeMove(uint_fast8_t pos, uint_fast8_t distance, Direction curre
 		break;
 	case left:
 		nx = x - distance;
-		// nx vai dar underflow
+		// nx pode dar underflow
 		if (distance > x)
 		{
 			willIntersect = willIntersectY;
@@ -133,7 +133,7 @@ Odio Board::executeMove(uint_fast8_t pos, uint_fast8_t distance, Direction curre
 		if (nx >= BOARD_WIDTH)
 		{
 			willIntersect = willIntersectY;
-			remaining = nx - BOARD_WIDTH;
+			remaining = nx - (BOARD_WIDTH - 1);
 			nx = BOARD_WIDTH - 1;
 		}
 		if (can_buy && willIntersectY && x <= BATATA_LOCX && nx > BATATA_LOCX)
@@ -147,10 +147,11 @@ Odio Board::executeMove(uint_fast8_t pos, uint_fast8_t distance, Direction curre
 	}
 	if (willIntersect)
 	{
-		return { nx, 2, Direction::up, true, remaining, can_buy};
+		return { nx, 2, current, true, remaining, nx == BATATA_LOCX && can_buy };
 	}
 	if (remaining > 0)
 	{
+		LOG("FAZENDO A CURVA para " << Board::turnCorner(nx, ny, current) << " ja que estamos em " << (int)nx << ", " << (int)ny);
 		return Board::executeMove(nx+ny* BOARD_WIDTH, remaining, Board::turnCorner(nx, ny, current), can_buy);
 	}
 	return { nx, ny, current, false, 0 , false};

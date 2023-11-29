@@ -137,7 +137,7 @@ void MessageHandler::processMessage(std::unique_ptr<ClientMessage> msg)
 		break;
 	case roll_dice:
 		LOG("roll_dice");
-		MessageHandler::processRollDice(std::move(msg), room, player_index);
+		MessageHandler::processDieRoll(std::move(msg), room, player_index);
 		break;
 	case buy_batata:
 		LOG("buy_batata");
@@ -352,6 +352,7 @@ void MessageHandler::processJoin(std::unique_ptr<ClientMessage> request, std::sh
 	room->player_count++;
 	LOG("player count ajustada para: " << room->player_count);
 	room->name = std::string((char*)request->room_code, ROOM_CODE_SIZE);
+	sock_to_rooms.insert({ request->creator, room });
 
 	response->msg_id = r_joined;
 	response->data = (unsigned char*)std::calloc(1, sizeof(char));
@@ -403,20 +404,15 @@ void MessageHandler::processMove(std::unique_ptr<ClientMessage> request, std::sh
 		notifyPlayer(room, std::move(response), player_id);
 		return;
 	}
-	Direction d = room->direction[player_id]; //(Direction)op;
-	if (op == 1)
-	{
-		d = board.turnCorner(room->position[player_id], d);
-	}
-	/*
+	Direction d = (Direction)op;
 	Direction old_d = room->direction[player_id];
-	if (!board.isValidintersectionDirection(room->position[player_id], d) || d != ((old_d + 1) % 2) + (old_d & 0b10))
+	LOG("player " << (int)player_id << " quer ir na dirção " << d << " e sua dir antiga era " << old_d << " is valid " << board.isValidintersectionDirection(room->position[player_id], d) << " other " << ((old_d + 1) % 2) + (old_d & 0b10));
+	if (!board.isValidintersectionDirection(room->position[player_id], d) || d == ((old_d + 1) % 2) + (old_d & 0b10))
 	{
 		response->msg_id = e_invalid_action;
 		notifyPlayer(room, std::move(response), player_id);
 		return;
 	}
-	*/
 	room->direction[player_id] = d;
 	response->data = (unsigned char*)std::calloc(2, sizeof(char));
 	response->data_size = 2;
@@ -426,7 +422,7 @@ void MessageHandler::processMove(std::unique_ptr<ClientMessage> request, std::sh
 	return;
 }
 
-void MessageHandler::processRollDice(std::unique_ptr<ClientMessage> request, std::shared_ptr<Room>& room, uint_fast8_t player_id)
+void MessageHandler::processDieRoll(std::unique_ptr<ClientMessage> request, std::shared_ptr<Room>& room, uint_fast8_t player_id)
 {
 	auto response = std::make_unique<ServerMessage>();
 	// verifica se o jogo começou
@@ -480,8 +476,9 @@ void MessageHandler::executeMovements(std::unique_ptr<ClientMessage> request, st
 	{
 		coins += std::rand() % 3;
 	}
-	response->data[1] = coins;
 	room->coins[player_id] += coins;
+	response->data[1] = room->coins[player_id];
+	LOG("O player " << (int)player_id << " esta sendo mandado para " << (int)pos << " com direção " << odio.direction);
 	room->stat_coins[player_id] += coins;
 	
 	if (odio.isIntersection && odio.remaining != 0)
@@ -512,8 +509,9 @@ void MessageHandler::executeMovements(std::unique_ptr<ClientMessage> request, st
 	room->whose_turn = (room->whose_turn + 1) % room->player_count;
 	if (room->whose_turn == 0)
 	{
-		MinigamesEnum me = (MinigamesEnum)((std::rand() % NOF_MINIGAMES) + 1);
 		room->round++;
+		/*
+		MinigamesEnum me = (MinigamesEnum)((std::rand() % NOF_MINIGAMES) + 1);
 		room->minigame = MinigamesFactory::createMinigame(me);
 		auto move = std::make_unique<ServerMessage>();
 		move->msg_id = n_minigame;
@@ -521,10 +519,12 @@ void MessageHandler::executeMovements(std::unique_ptr<ClientMessage> request, st
 		move->data_size = 1;
 		move->data[0] = me;
 		notifyRoom(room, std::move(move), MAX_PLAYERS);
+		*/
 	}
 	if (room->round == MAX_ROUNDS)
 	{
-		MessageHandler::endGame(room);
+		LOG("JOGAMOS TODOS OS ROUNDS... FOI DIVERTIDO");
+		MessageHandler::deleteRoomAndEndGame(request->creator);
 		return;
 	}
 	// notifica o inicio de um novo turno
@@ -573,9 +573,10 @@ void MessageHandler::processBuyBatata(std::unique_ptr<ClientMessage> request, st
 	buy->data = (unsigned char*)std::calloc(1, sizeof(char));
 	buy->data_size = 1;
 	buy->data[0] = player_id;
-	notifyRoom(room, std::move(buy), player_id);
-	response->msg_id = r_ok;
+	notifyRoom(room, std::move(buy), MAX_PLAYERS);
+	response->msg_id = r_move;
 	response->data = (unsigned char*)std::calloc(2, sizeof(char));
+	response->data_size = 2;
 	MessageHandler::executeMovements(std::move(request), response, room, player_id);
 	return;
 }
@@ -710,10 +711,11 @@ void MessageHandler::endGame(std::shared_ptr<Room>& room)
 		uint_fast8_t player_id = std::get<0>(podium.at(i));
 		buf[i * PODIUM_SIZE] = player_id;
 		buf[i * PODIUM_SIZE + 1] = std::get<1>(podium.at(i));
-		buf[i * PODIUM_SIZE + 2] = (unsigned char)batata_bonus;
-		std::memcpy(buf + 3 + (i * PODIUM_SIZE), &room->stat_coins[player_id], sizeof(unsigned long long));
-		std::memcpy(buf + 3 + sizeof(unsigned long long) + (i * PODIUM_SIZE), &room->stat_steps[player_id], sizeof(unsigned long long));
-		std::memcpy(buf + 3 + (2*sizeof(unsigned long long)) + (i * PODIUM_SIZE), &room->stat_emotes[player_id], sizeof(unsigned long long));
+		buf[i * PODIUM_SIZE + 2] = (unsigned char)std::get<2>(podium.at(i));
+		buf[i * PODIUM_SIZE + 3] = (unsigned char)batata_bonus;
+		std::memcpy(buf + 4 + (i * PODIUM_SIZE), &room->stat_coins[player_id], sizeof(unsigned long long));
+		std::memcpy(buf + 4 + sizeof(unsigned long long) + (i * PODIUM_SIZE), &room->stat_steps[player_id], sizeof(unsigned long long));
+		std::memcpy(buf + 4 + (2*sizeof(unsigned long long)) + (i * PODIUM_SIZE), &room->stat_emotes[player_id], sizeof(unsigned long long));
 	}
 	for (uint_fast8_t i = 0; i < player_count; i++)
 	{
@@ -722,14 +724,14 @@ void MessageHandler::endGame(std::shared_ptr<Room>& room)
 		{
 			continue;
 		}
+		room->players[i] = INVALID_SOCKET;
 		auto end = std::make_unique<ServerMessage>();
 		end->msg_id = n_game_end;
 		end->data = (unsigned char*)std::calloc(player_count, PODIUM_SIZE);
 		end->data_size = player_count * PODIUM_SIZE;
 		std::memcpy(end->data, buf, player_count * PODIUM_SIZE);
 		MessageHandler::notifySocket(sock, std::move(end));
-		sock_to_rooms.erase(room->players[i]);
-		room->players[i] = INVALID_SOCKET;
+		sock_to_rooms.erase(sock);
 		closesocket(sock);
 	}
 	free(buf);
@@ -744,10 +746,9 @@ void MessageHandler::deleteRoomAndEndGame(SOCKET sock)
 	}
 	std::shared_ptr<Room> room = r->second;
 	// 3 pois temos uma aqui e uma em cada mapa
-	if (room->player_count != 1 && room.use_count() > 3)
-	{
-		endGame(r->second);
-	}
+	LOG("use count" << room.use_count() << " pcount " << room->player_count);
+	LOG("deleta a sala: " << r->second->name);
 	rooms.erase(r->second->name);
+	endGame(r->second);
 	sock_to_rooms.erase(sock);
 }

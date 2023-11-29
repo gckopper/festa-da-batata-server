@@ -2,6 +2,7 @@
 #include "Minigame.h"
 #include "RockPaperScissors.h"
 #include "CutTheWire.h"
+#include "CoinFlip.h"
 class MinigamesFactory
 {
 public:

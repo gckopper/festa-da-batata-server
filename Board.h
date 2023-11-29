@@ -3,7 +3,7 @@
 #include <bitset>
 #include <array>
 #include "MessageTypes.h"
-
+#include "Logger.h"
 struct Odio {
 	uint_fast8_t x;
 	uint_fast8_t y;

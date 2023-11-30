@@ -1,7 +1,7 @@
 // Festa-da-batata-server.cpp : This file contains the 'main' function. Program execution begins and ends there.
 //
 #define SERVER
-#include "Game.h"
+#include "MessageHandler.h"
 
 #include "Logger.h"
 

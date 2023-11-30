@@ -133,7 +133,7 @@
     <ClCompile Include="CoinFlip.cpp" />
     <ClCompile Include="CutTheWire.cpp" />
     <ClCompile Include="FestaDaBatataServer.cpp" />
-    <ClCompile Include="Game.cpp" />
+    <ClCompile Include="MessageHandler.cpp" />
     <ClCompile Include="MinigamesFactory.cpp" />
     <ClCompile Include="RockPaperScissors.cpp" />
   </ItemGroup>
@@ -141,7 +141,7 @@
     <ClInclude Include="Board.h" />
     <ClInclude Include="CoinFlip.h" />
     <ClInclude Include="CutTheWire.h" />
-    <ClInclude Include="Game.h" />
+    <ClInclude Include="MessageHandler.h" />
     <ClInclude Include="Logger.h" />
     <ClInclude Include="Room.h" />
     <ClInclude Include="MessageTypes.h" />
